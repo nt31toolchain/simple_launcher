@@ -232,7 +232,7 @@ find_shebang(char * buffer, size_t bufsize)
     read = fread(buffer, sizeof(char), bufsize, fp);
     p = find_pattern(buffer, read, end_cdr_sig, sizeof(end_cdr_sig));
     if (p != NULL) {
-        end_cdr = *((ENDCDR *) p);
+        memcpy(&end_cdr, p, sizeof(end_cdr));  /* p has any alignment */
         end_cdr_offset = pos + (p - buffer);
     }
     else {
@@ -251,7 +251,7 @@ find_shebang(char * buffer, size_t bufsize)
         read = fread(big_buffer, sizeof(char), n, fp);
         p = find_pattern(big_buffer, read, end_cdr_sig, sizeof(end_cdr_sig));
         assert(p != NULL, "Unable to find an appended archive.");
-        end_cdr = *((ENDCDR *) p);
+        memcpy(&end_cdr, p, sizeof(end_cdr));  /* p has any alignment */
         end_cdr_offset = pos + (p - big_buffer);
         free(big_buffer);
     }
@@ -774,7 +774,12 @@ run_child(wchar_t * cmdline)
     STARTUPINFOW si;
 
     job = CreateJobObject(NULL, NULL);
+#if defined(__NT31_SDK__)
+    /* Windows NT 3.x and 4.0 have no job objects. */
+    if (job != NULL) {
+#else
     assert(job != NULL, "Job creation failed");
+#endif
     ok = QueryInformationJobObject(job, JobObjectExtendedLimitInformation,
                                   &job_info, sizeof(job_info), &rc);
     assert(ok && (rc == sizeof(job_info)), "Job information querying failed");
@@ -783,6 +788,9 @@ run_child(wchar_t * cmdline)
     ok = SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info,
                                  sizeof(job_info));
     assert(ok, "Job information setting failed");
+#if defined(__NT31_SDK__)
+    }
+#endif
     memset(&si, 0, sizeof(si));
     GetStartupInfoW(&si);
 /*
